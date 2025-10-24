@@ -1,0 +1,24 @@
+name: Publish Docker Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - stage
+      - develop
+
+jobs:
+  call-template:
+    uses: microservices-final-project/ci-templates/.github/workflows/build.yml@main
+    with:
+      image_name: ${{ github.repository }}
+      image_tag: ${{ github.ref_name }}
+      dockerfile_path: ./Dockerfile
+      context: .
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+      ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+      ACR_NAME: ${{ secrets.ACR_NAME }}

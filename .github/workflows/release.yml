@@ -1,0 +1,13 @@
+# .github/workflows/release.yml
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  call-template:
+    uses: microservices-final-project/ci-templates/.github/workflows/release.yml@main
+    with:
+      release_branch: main
+      node_version: '22'
