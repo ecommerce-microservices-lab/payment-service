@@ -6,6 +6,6 @@ on:
 
 jobs:
   call-e2e:
-    uses: microservices-final-project/ci-templates/.github/workflows/call_remote_e2e.yml@main
+    uses: ecommerce-microservices-lab/ci-templates/.github/workflows/call_remote_e2e.yml@main
     secrets:
       GH_PAT: ${{ secrets.GH_PAT }}
