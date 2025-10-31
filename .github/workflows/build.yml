@@ -10,7 +10,7 @@ on:
 
 jobs:
   call-template:
-    uses: microservices-final-project/ci-templates/.github/workflows/build.yml@main
+    uses: ecommerce-microservices-lab/ci-templates/.github/workflows/build.yml@main
     with:
       image_name: ${{ github.repository }}
       image_tag: ${{ github.ref_name }}
@@ -22,3 +22,9 @@ jobs:
       ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
       ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
       ACR_NAME: ${{ secrets.ACR_NAME }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
