@@ -11,3 +11,5 @@ jobs:
     with:
       release_branch: main
       node_version: '22'
+    secrets:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
