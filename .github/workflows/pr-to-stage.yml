@@ -1,11 +1,23 @@
-name: Call Remote E2E
+name: PR to Stage Pipeline
 
 on:
   pull_request:
     branches: [stage]
 
 jobs:
-  call-e2e:
-    uses: microservices-final-project/ci-templates/.github/workflows/call_remote_e2e.yml@main
+  call-template:
+    uses: ecommerce-microservices-lab/ci-templates/.github/workflows/pr-to-stage.yaml@main
+    with:
+      image_name: ${{ github.repository }}
     secrets:
-      GH_PAT: ${{ secrets.GH_PAT }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+      ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
