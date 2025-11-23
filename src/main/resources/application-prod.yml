@@ -16,7 +16,7 @@ spring:
     locations: classpath:db/migration
     table: flyway_payment_history
   datasource:
-    url: jdbc:mysql://localhost:3306/ecommerce_stage_db
+    url: jdbc:mysql://mysql-service:3306/ecommerce_prod_db
     username: root
     password: 
   jpa:
