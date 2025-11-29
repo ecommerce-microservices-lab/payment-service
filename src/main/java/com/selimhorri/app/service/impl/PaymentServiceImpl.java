@@ -4,8 +4,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import javax.annotation.PostConstruct;
 import javax.transaction.Transactional;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
@@ -34,6 +38,18 @@ public class PaymentServiceImpl implements PaymentService {
 
 	private final PaymentRepository paymentRepository;
 	private final RestTemplate restTemplate;
+    private final MeterRegistry meterRegistry;
+
+    private Counter completedPayments;
+
+    @PostConstruct
+    public void initMetric(){
+        this.completedPayments = Counter
+                .builder("completed_payments_total")
+                .description("Pagos completados exitosamente")
+                .tag("service", "payment")
+                .register(meterRegistry);
+    }
 
 	@Override
 	public List<PaymentDto> findAll() {
@@ -155,6 +171,7 @@ public class PaymentServiceImpl implements PaymentService {
 							break;
 						case IN_PROGRESS:
 							newStatus = PaymentStatus.COMPLETED;
+                            completedPayments.increment();
 							break;
 						case COMPLETED:
 							throw new IllegalStateException(

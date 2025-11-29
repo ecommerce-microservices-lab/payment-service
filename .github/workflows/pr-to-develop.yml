@@ -1,12 +1,16 @@
-name: PR to Develop Analysis
+name: CI Pipeline (PR to Develop Branch)
 
 on:
   pull_request:
-    branches: [develop]
+    branches:
+      - develop
 
 jobs:
-  call-sonar:
-    uses: microservices-final-project/ci-templates/.github/workflows/pr-to-develop.yaml@main
+  call-template:
+    uses: ecommerce-microservices-lab/ci-templates/.github/workflows/pr-to-develop.yaml@main
+    with:
+      projectKeyBase: ${{ github.repository }}
+      projectNameBase: ${{ github.repository }}
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
