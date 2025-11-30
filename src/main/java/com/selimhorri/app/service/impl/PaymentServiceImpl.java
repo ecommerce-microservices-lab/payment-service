@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
 import javax.transaction.Transactional;
 
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -106,7 +107,8 @@ public class PaymentServiceImpl implements PaymentService {
 
 	@Override
 	@Transactional
-    @Retry(name = "paymentService", fallbackMethod = "saveFallback")
+	@Bulkhead(name = "paymentService", fallbackMethod = "saveBulkheadFallback")
+	@Retry(name = "paymentService", fallbackMethod = "saveFallback")
 	public PaymentDto save(final PaymentDto paymentDto) {
 		log.info("*** PaymentDto, service; save payment *");
 
@@ -156,14 +158,16 @@ public class PaymentServiceImpl implements PaymentService {
 		}
 	}
 
-	/**
-	 * Método fallback que se ejecuta cuando todos los reintentos del método save han fallado.
-	 * 
-	 * @param paymentDto el DTO del pago que se intentó guardar
-	 * @param ex la excepción que causó el fallback
-	 * @return nunca retorna, siempre lanza una excepción
-	 * @throws PaymentServiceException siempre lanza esta excepción indicando que no se pudo procesar el pago
-	 */
+	public PaymentDto saveBulkheadFallback(final PaymentDto paymentDto, final Exception ex) {
+		log.error("*** PaymentDto, service; save payment bulkhead fallback - service overloaded for order ID: {} *", 
+				paymentDto != null && paymentDto.getOrderDto() != null ? paymentDto.getOrderDto().getOrderId() : "unknown", ex);
+		throw new PaymentServiceException(
+				String.format("Service is currently overloaded. Maximum concurrent calls limit reached. Please try again later. Order ID: %s",
+						paymentDto != null && paymentDto.getOrderDto() != null 
+								? paymentDto.getOrderDto().getOrderId().toString() 
+								: "unknown"));
+	}
+
 	public PaymentDto saveFallback(final PaymentDto paymentDto, final Exception ex) {
 		log.error("*** PaymentDto, service; save payment fallback after all retry attempts failed for order ID: {} *", 
 				paymentDto != null && paymentDto.getOrderDto() != null ? paymentDto.getOrderDto().getOrderId() : "unknown", ex);
