@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
 import javax.transaction.Transactional;
 
+import io.github.resilience4j.retry.annotation.Retry;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -105,6 +106,7 @@ public class PaymentServiceImpl implements PaymentService {
 
 	@Override
 	@Transactional
+    @Retry(name = "paymentService", fallbackMethod = "saveFallback")
 	public PaymentDto save(final PaymentDto paymentDto) {
 		log.info("*** PaymentDto, service; save payment *");
 
@@ -115,6 +117,8 @@ public class PaymentServiceImpl implements PaymentService {
 
 		try {
 			// 1. Verificar existencia de la orden
+			// Las excepciones RestClientException y ResourceAccessException se propagan
+			// para que Resilience4j pueda detectarlas y hacer retry
 			OrderDto orderDto = this.restTemplate.getForObject(
 					AppConstant.DiscoveredDomainsApi.ORDER_SERVICE_API_URL + "/"
 							+ paymentDto.getOrderDto().getOrderId(),
@@ -133,28 +137,42 @@ public class PaymentServiceImpl implements PaymentService {
 					this.paymentRepository.save(PaymentMappingHelper.mapForPayment(paymentDto)));
 
 			// 3. Actualizar estado de la orden (PATCH)
+			// Las excepciones RestClientException se propagan para que Resilience4j pueda hacer retry
 			String patchUrl = AppConstant.DiscoveredDomainsApi.ORDER_SERVICE_API_URL + "/"
 					+ paymentDto.getOrderDto().getOrderId() + "/status";
 
-			try {
-				this.restTemplate.patchForObject(
-						patchUrl,
-						null,
-						Void.class);
-				log.info("Order status updated successfully for order ID: {}", paymentDto.getOrderDto().getOrderId());
-			} catch (RestClientException e) {
-				log.error("Failed to update order status for order ID: {}", paymentDto.getOrderDto().getOrderId(), e);
-				// Puedes decidir si lanzar excepción o continuar
-				throw new PaymentServiceException("Payment saved but failed to update order status: " + e.getMessage());
-			}
+			this.restTemplate.patchForObject(
+					patchUrl,
+					null,
+					Void.class);
+			log.info("Order status updated successfully for order ID: {}", paymentDto.getOrderDto().getOrderId());
 
 			return savedPayment;
 
 		} catch (HttpClientErrorException.NotFound ex) {
+			// Esta excepción está en ignore-exceptions, no se reintentará
+			log.error("Order not found for order ID: {}", paymentDto.getOrderDto().getOrderId(), ex);
 			throw new PaymentServiceException("Order with ID " + paymentDto.getOrderDto().getOrderId() + " not found");
-		} catch (RestClientException ex) {
-			throw new PaymentServiceException("Error while processing payment: " + ex.getMessage());
 		}
+	}
+
+	/**
+	 * Método fallback que se ejecuta cuando todos los reintentos del método save han fallado.
+	 * 
+	 * @param paymentDto el DTO del pago que se intentó guardar
+	 * @param ex la excepción que causó el fallback
+	 * @return nunca retorna, siempre lanza una excepción
+	 * @throws PaymentServiceException siempre lanza esta excepción indicando que no se pudo procesar el pago
+	 */
+	public PaymentDto saveFallback(final PaymentDto paymentDto, final Exception ex) {
+		log.error("*** PaymentDto, service; save payment fallback after all retry attempts failed for order ID: {} *", 
+				paymentDto != null && paymentDto.getOrderDto() != null ? paymentDto.getOrderDto().getOrderId() : "unknown", ex);
+		throw new PaymentServiceException(
+				String.format("Failed to save payment after all retry attempts. Order ID: %s. Error: %s",
+						paymentDto != null && paymentDto.getOrderDto() != null 
+								? paymentDto.getOrderDto().getOrderId().toString() 
+								: "unknown",
+						ex.getMessage()));
 	}
 
 	@Override
