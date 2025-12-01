@@ -15,6 +15,16 @@ spring:
     - dev
 
 resilience4j:
+  retry:
+    instances:
+      paymentService:
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.RestClientException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException$NotFound
   circuitbreaker:
     instances:
       paymentService:
@@ -27,6 +37,11 @@ resilience4j:
         sliding-window-size: 10
         wait-duration-in-open-state: 5s
         sliding-window-type: COUNT_BASED
+  bulkhead:
+    instances:
+      paymentService:
+        max-concurrent-calls: 10
+        max-wait-duration: 0ms
 
 management:
   health:
