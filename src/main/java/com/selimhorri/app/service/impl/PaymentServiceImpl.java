@@ -7,6 +7,8 @@ import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
 import javax.transaction.Transactional;
 
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.retry.annotation.Retry;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -105,6 +107,8 @@ public class PaymentServiceImpl implements PaymentService {
 
 	@Override
 	@Transactional
+	@Bulkhead(name = "paymentService", fallbackMethod = "saveBulkheadFallback")
+	@Retry(name = "paymentService", fallbackMethod = "saveFallback")
 	public PaymentDto save(final PaymentDto paymentDto) {
 		log.info("*** PaymentDto, service; save payment *");
 
@@ -115,6 +119,8 @@ public class PaymentServiceImpl implements PaymentService {
 
 		try {
 			// 1. Verificar existencia de la orden
+			// Las excepciones RestClientException y ResourceAccessException se propagan
+			// para que Resilience4j pueda detectarlas y hacer retry
 			OrderDto orderDto = this.restTemplate.getForObject(
 					AppConstant.DiscoveredDomainsApi.ORDER_SERVICE_API_URL + "/"
 							+ paymentDto.getOrderDto().getOrderId(),
@@ -133,28 +139,44 @@ public class PaymentServiceImpl implements PaymentService {
 					this.paymentRepository.save(PaymentMappingHelper.mapForPayment(paymentDto)));
 
 			// 3. Actualizar estado de la orden (PATCH)
+			// Las excepciones RestClientException se propagan para que Resilience4j pueda hacer retry
 			String patchUrl = AppConstant.DiscoveredDomainsApi.ORDER_SERVICE_API_URL + "/"
 					+ paymentDto.getOrderDto().getOrderId() + "/status";
 
-			try {
-				this.restTemplate.patchForObject(
-						patchUrl,
-						null,
-						Void.class);
-				log.info("Order status updated successfully for order ID: {}", paymentDto.getOrderDto().getOrderId());
-			} catch (RestClientException e) {
-				log.error("Failed to update order status for order ID: {}", paymentDto.getOrderDto().getOrderId(), e);
-				// Puedes decidir si lanzar excepción o continuar
-				throw new PaymentServiceException("Payment saved but failed to update order status: " + e.getMessage());
-			}
+			this.restTemplate.patchForObject(
+					patchUrl,
+					null,
+					Void.class);
+			log.info("Order status updated successfully for order ID: {}", paymentDto.getOrderDto().getOrderId());
 
 			return savedPayment;
 
 		} catch (HttpClientErrorException.NotFound ex) {
+			// Esta excepción está en ignore-exceptions, no se reintentará
+			log.error("Order not found for order ID: {}", paymentDto.getOrderDto().getOrderId(), ex);
 			throw new PaymentServiceException("Order with ID " + paymentDto.getOrderDto().getOrderId() + " not found");
-		} catch (RestClientException ex) {
-			throw new PaymentServiceException("Error while processing payment: " + ex.getMessage());
 		}
+	}
+
+	public PaymentDto saveBulkheadFallback(final PaymentDto paymentDto, final Exception ex) {
+		log.error("*** PaymentDto, service; save payment bulkhead fallback - service overloaded for order ID: {} *", 
+				paymentDto != null && paymentDto.getOrderDto() != null ? paymentDto.getOrderDto().getOrderId() : "unknown", ex);
+		throw new PaymentServiceException(
+				String.format("Service is currently overloaded. Maximum concurrent calls limit reached. Please try again later. Order ID: %s",
+						paymentDto != null && paymentDto.getOrderDto() != null 
+								? paymentDto.getOrderDto().getOrderId().toString() 
+								: "unknown"));
+	}
+
+	public PaymentDto saveFallback(final PaymentDto paymentDto, final Exception ex) {
+		log.error("*** PaymentDto, service; save payment fallback after all retry attempts failed for order ID: {} *", 
+				paymentDto != null && paymentDto.getOrderDto() != null ? paymentDto.getOrderDto().getOrderId() : "unknown", ex);
+		throw new PaymentServiceException(
+				String.format("Failed to save payment after all retry attempts. Order ID: %s. Error: %s",
+						paymentDto != null && paymentDto.getOrderDto() != null 
+								? paymentDto.getOrderDto().getOrderId().toString() 
+								: "unknown",
+						ex.getMessage()));
 	}
 
 	@Override
